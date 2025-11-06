@@ -4,7 +4,7 @@ from airflow.operators.python import PythonOperator
 
 # Simple function for the task
 def hello():
-    print("Airflow is up and!")
+    print("Airflow is up and running!")
 
 with DAG(
     dag_id="test_simple_dag",
