@@ -9,7 +9,7 @@ def hello():
 with DAG(
     dag_id="test_simple_dag",
     start_date=datetime(2023, 1, 1),
-    schedule_interval=None,  # Run manually
+    schedule=None,
     catchup=False,
 ) as dag:
 
