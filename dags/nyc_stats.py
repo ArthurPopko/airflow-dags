@@ -1,23 +1,23 @@
 from airflow import DAG
-from airflow.providers.amazon.aws.hooks.s3 import S3Hook
 from airflow.providers.standard.operators.python import PythonOperator
 from datetime import datetime
+import boto3
 
-def check_aws_connection():
+def check_aws_credentials():
     try:
-        # Используем Connection aws_default (или своё имя)
-        hook = S3Hook(aws_conn_id="aws_default")
+        sts = boto3.client("sts")
         
-        # Просто проверяем, можем ли получить список бакетов
-        buckets = hook.list_buckets()
+        identity = sts.get_caller_identity()
         print("Connected to AWS successfully!")
-        print("Buckets available:", buckets)
+        print("Account:", identity["Account"])
+        print("UserId:", identity["UserId"])
+        print("ARN:", identity["Arn"])
     except Exception as e:
         print("AWS connection failed:", e)
         raise
 
 with DAG(
-    dag_id="check_aws_connection",
+    dag_id="check_aws_connection_boto3",
     start_date=datetime(2025, 11, 11),
     schedule=None,
     catchup=False
@@ -25,5 +25,5 @@ with DAG(
 
     PythonOperator(
         task_id="check_connection",
-        python_callable=check_aws_connection
+        python_callable=check_aws_credentials
     )
