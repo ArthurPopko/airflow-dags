@@ -1,6 +1,4 @@
 import boto3
-from botocore import UNSIGNED
-from botocore.config import Config
 
 from airflow import DAG
 from airflow.providers.standard.operators.python import PythonOperator
