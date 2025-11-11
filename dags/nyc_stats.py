@@ -1,29 +1,30 @@
+import boto3
+from botocore import UNSIGNED
+from botocore.config import Config
+
 from airflow import DAG
-from airflow.operators.python import PythonOperator
-from airflow.providers.amazon.aws.hooks.s3 import S3Hook
+from airflow.providers.standard.operators.python import PythonOperator
 from datetime import datetime
 
+
 def list_files_from_s3():
-    # Create S3 hook using default AWS connection
-    hook = S3Hook(aws_conn_id="aws_default")
-    
-    # List all files in the bucket
-    keys = hook.list_keys(bucket_name="nyc-tlc")
-    
-    # Print first 50 files to Airflow logs
-    # (Too many files → limit for readability)
-    for k in keys[:50]:
-        print(k)
+    # Create anonymous S3 client
+    s3 = boto3.client("s3", config=Config(signature_version=UNSIGNED))
+
+    resp = s3.list_objects_v2(Bucket="nyc-tlc")
+
+    for obj in resp.get("Contents", [])[:50]:
+        print(obj["Key"])
+
 
 with DAG(
     dag_id="list_nyc_tlc_files",
     start_date=datetime(2024, 1, 1),
-    schedule=None,  # run manually
-    catchup=False,
-    tags=["s3", "example"],
+    schedule_interval=None,
+    catchup=False
 ):
 
-    list_task = PythonOperator(
+    PythonOperator(
         task_id="list_files",
-        python_callable=list_files_from_s3,
+        python_callable=list_files_from_s3
     )
