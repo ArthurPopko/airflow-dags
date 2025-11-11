@@ -5,7 +5,7 @@ from datetime import datetime
 
 def list_files_from_s3():
     # Используем Connection с aws_conn_id="my_aws_conn"
-    hook = S3Hook(aws_conn_id="my_aws_conn")
+    hook = S3Hook(aws_conn_id="aws_default")
     
     # Получаем список файлов в бакете с префиксом
     keys = hook.list_keys(bucket_name="nyc-tlc", prefix="trip data/")
