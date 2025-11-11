@@ -18,7 +18,7 @@ def list_files_from_s3():
 with DAG(
     dag_id="list_nyc_tlc_files",
     start_date=datetime(2024, 1, 1),
-    schedule_interval=None,
+    schedule=None,
     catchup=False
 ):
     PythonOperator(
