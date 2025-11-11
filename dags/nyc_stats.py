@@ -5,7 +5,7 @@ import boto3
 
 def check_aws_credentials():
     try:
-        sts = boto3.client("sts")
+        sts = boto3.client("s3")
         
         identity = sts.get_caller_identity()
         print("Connected to AWS successfully!")
