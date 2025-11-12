@@ -1,13 +1,18 @@
+import os
 from datetime import datetime, timedelta
 from airflow import DAG
 from airflow.operators.bash import BashOperator
+from airflow.models import Variable
 
-BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data"
-MONTHS = ["2024-06", "2024-07", "2024-08", "2024-09", "2024-10", "2024-11"]
-CAB_TYPES = ["yellow", "green"]
-S3_BUCKET = "nyc-tlc-stats"
-S3_PREFIX = "nyc_tlc_data/"
-AWS_REGION = "eu-central-1"
+DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
+DAG_CONFIG = Variable.get(f"{DAG_ID.lower()}__config", {}, deserialize_json=True)
+
+AWS_REGION = DAG_CONFIG.get("AWS_REGION")
+S3_BUCKET = DAG_CONFIG.get("S3_BUCKET")
+S3_PREFIX = DAG_CONFIG.get("S3_PREFIX")
+BASE_URL = DAG_CONFIG.get("BASE_URL")
+MONTHS = DAG_CONFIG.get("MONTHS")
+CAB_TYPES = DAG_CONFIG.get("CAB_TYPES")
 
 default_args = {
     "owner": "airflow",
@@ -16,7 +21,7 @@ default_args = {
 }
 
 with DAG(
-    dag_id="nyc_tlc_stream_to_s3_strict",
+    dag_id=DAG_ID,
     start_date=datetime(2024, 12, 1),
     schedule=None,
     catchup=False,
