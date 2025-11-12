@@ -39,6 +39,6 @@ with DAG(
 ) as dag:
 
     PythonOperator(
-        task_id="check_connection",
+        task_id="check_connection_boto3_conn",
         python_callable=check_aws_connection_from_conn
     )
