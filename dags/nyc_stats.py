@@ -16,12 +16,12 @@ default_args = {
 }
 
 with DAG(
-    dag_id="nyc_tlc_stream_to_s3",
+    dag_id="nyc_tlc_stream_to_s3_strict",
     start_date=datetime(2024, 12, 1),
     schedule=None,
     catchup=False,
     default_args=default_args,
-    description="Stream 6 months of NYC TLC Yellow/Green Cab data directly to S3 without local storage",
+    description="Stream 6 months of NYC TLC Yellow/Green Cab data directly to S3, fail on error",
 ) as dag:
 
     for cab in CAB_TYPES:
@@ -33,9 +33,8 @@ with DAG(
             stream_to_s3 = BashOperator(
                 task_id=f"stream_{cab}_{month}_to_s3",
                 bash_command=(
-                    f"curl -s {url} | "
-                    f"aws s3 cp - {s3_path} "
-                    f"--region {AWS_REGION} "
-                    f"--expected-size 200000000 || echo 'Failed {file_name}'"
-                )
+                    # -f → fail on HTTP errors, -S → show error, -L → follow redirects
+                    f"curl -fSL {url} | "
+                    f"aws s3 cp - {s3_path} --region {AWS_REGION}"
+                ),
             )
