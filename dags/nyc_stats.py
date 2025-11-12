@@ -5,7 +5,7 @@ from airflow.operators.bash import BashOperator
 BASE_URL = "https://d37ci6vzurychx.cloudfront.net/trip-data"
 MONTHS = ["2024-06", "2024-07", "2024-08", "2024-09", "2024-10", "2024-11"]
 CAB_TYPES = ["yellow", "green"]
-S3_BUCKET = "airflow-art"
+S3_BUCKET = "nyc-tlc-stats"
 S3_PREFIX = "nyc_tlc_data/"
 AWS_REGION = "eu-central-1"
 
