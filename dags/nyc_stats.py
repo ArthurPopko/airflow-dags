@@ -26,7 +26,7 @@ with DAG(
     schedule=None,
     catchup=False,
     default_args=default_args,
-    description="Stream 6 months of NYC TLC Yellow/Green Cab data directly to S3, fail on error",
+    description="Stream 6 months of NYC TLC Yellow/Green Cab data directly to S3",
 ) as dag:
 
     for cab in CAB_TYPES:
