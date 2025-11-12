@@ -33,7 +33,7 @@ with DAG(
         for month in MONTHS:
             file_name = f"{cab}_tripdata_{month}.parquet"
             url = f"{BASE_URL}/{file_name}"
-            s3_path = f"s3://{S3_BUCKET}/{S3_PREFIX}{file_name}"
+            s3_path = f"s3://{S3_BUCKET}/{S3_PREFIX}/{file_name}"
 
             stream_to_s3 = BashOperator(
                 task_id=f"stream_{cab}_{month}_to_s3",
