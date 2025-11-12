@@ -1,8 +1,9 @@
 import os
 from datetime import datetime, timedelta
+
 from airflow import DAG
-from airflow.operators.bash import BashOperator
 from airflow.models import Variable
+from airflow.operators.bash import BashOperator
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 DAG_CONFIG = Variable.get(f"{DAG_ID.lower()}__config", {}, deserialize_json=True)

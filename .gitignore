@@ -1,2 +1,7 @@
 .venv/
 .aws/
+/.idea/
+__pycache__/
+.DS_Store
+.vscode/
+.python-version
