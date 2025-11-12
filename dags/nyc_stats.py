@@ -14,7 +14,7 @@ S3_PREFIX = "nyc_tlc/"
 with DAG(
     dag_id="nyc_tlc_download_to_s3",
     start_date=datetime(2024, 12, 1),
-    schedule_interval=None,
+    schedule=None,
     catchup=False,
     default_args={
         "owner": "airflow",
