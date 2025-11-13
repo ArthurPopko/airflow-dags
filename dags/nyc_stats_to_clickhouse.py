@@ -3,6 +3,7 @@ from datetime import datetime
 
 import numpy as np
 import pandas as pd
+import requests
 import s3fs
 from airflow import DAG
 from airflow.decorators import task
@@ -22,9 +23,8 @@ LOCAL_DIR = "/tmp/nyc_tlc_data"
 SCHEMA = "staging"
 TABLE = "nyc_tlc_tripdata_local"
 
-
 os.makedirs(LOCAL_DIR, exist_ok=True)
-fs = s3fs.S3FileSystem()
+fs = s3fs.S3FileSystem(anon=False)
 
 # --- DAG ---
 with DAG(
@@ -41,14 +41,17 @@ with DAG(
         local_path = os.path.join(LOCAL_DIR, file_name)
         s3_path = f"s3://{S3_BUCKET}/{file_name}"
 
-        # Скачивание
+        # Скачивание через requests
         if not os.path.exists(local_path):
             url = f"{BASE_URL}/{file_name}"
-            os.system(f"curl -fSL {url} -o {local_path}")
+            resp = requests.get(url)
+            resp.raise_for_status()
+            with open(local_path, "wb") as f:
+                f.write(resp.content)
 
-        # Загрузка в S3
+        # Загрузка в S3 через s3fs
         if not fs.exists(s3_path):
-            os.system(f"aws s3 cp {local_path} {s3_path} --region {AWS_REGION}")
+            fs.put(local_path, s3_path)
 
         return local_path
 
@@ -82,6 +85,7 @@ with DAG(
         ]
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
         df = df.dropna(subset=numeric_cols)
+
         df["passenger_count"] = df["passenger_count"].astype(int)
         df["PULocationID"] = df["PULocationID"].astype(int)
         df["DOLocationID"] = df["DOLocationID"].astype(int)
@@ -122,10 +126,6 @@ with DAG(
         hook.insert_dataframe(table=f"{SCHEMA}.{TABLE}", df=pd.read_parquet(file_path))
 
     # --- Flow ---
-    files = []
-    for cab in CAB_TYPES:
-        for month in MONTHS:
-            files.append(download_and_upload(cab, month))
-
+    files = [download_and_upload(cab, month) for cab in CAB_TYPES for month in MONTHS]
     clickhouse_file = prepare_data(files)
     load_to_clickhouse(clickhouse_file)
