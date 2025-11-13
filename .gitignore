@@ -5,3 +5,4 @@ __pycache__/
 .DS_Store
 .vscode/
 .python-version
+nyc_tlc_data/
