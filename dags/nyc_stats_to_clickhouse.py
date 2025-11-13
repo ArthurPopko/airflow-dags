@@ -30,7 +30,7 @@ fs = s3fs.S3FileSystem(anon=False)
 with DAG(
     dag_id="nyc_tlc_etl_clickhouse",
     start_date=datetime(2025, 11, 1),
-    schedule_interval="@monthly",
+    schedule="@monthly",
     catchup=False,
     tags=["nyc", "etl"],
 ) as dag:
