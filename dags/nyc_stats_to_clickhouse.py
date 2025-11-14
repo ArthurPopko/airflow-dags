@@ -85,6 +85,9 @@ with DAG(
         ]
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
         df = df.dropna(subset=numeric_cols)
+        df["passenger_count"] = df["passenger_count"].astype(int)
+        df["PULocationID"] = df["PULocationID"].astype(int)
+        df["DOLocationID"] = df["DOLocationID"].astype(int)
 
         df = df.query(
             "1 <= passenger_count <= 9 & "
