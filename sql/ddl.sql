@@ -1,9 +1,9 @@
 CREATE DATABASE staging;
 
-CREATE TABLE staging.nyc_tlc_tripdata_local (
+CREATE OR REPLACE TABLE staging.nyc_tlc_tripdata_local (
     cab_type String,
-    tpep_pickup_datetime DateTime64 (3, 'UTC'),
-    tpep_dropoff_datetime DateTime64 (3, 'UTC'),
+    pickup_datetime DateTime64 (3, 'UTC'),
+    dropoff_datetime DateTime64 (3, 'UTC'),
     driver_id UInt32,
     passenger_count UInt8,
     trip_distance Float32,
@@ -15,7 +15,7 @@ CREATE TABLE staging.nyc_tlc_tripdata_local (
     _etl_timestamp DateTime DEFAULT now()
 ) ENGINE = MergeTree
 PARTITION BY
-    toYYYYMM (tpep_pickup_datetime)
+    toYYYYMM (pickup_datetime)
 ORDER BY (
-        cab_type, tpep_pickup_datetime
+        cab_type, pickup_datetime
     ) SETTINGS index_granularity = 8192;

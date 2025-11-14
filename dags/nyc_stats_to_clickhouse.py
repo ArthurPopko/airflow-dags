@@ -52,16 +52,31 @@ with DAG(
         df = pd.read_parquet(file_path)
 
         cab_type = os.path.basename(file_path).split("_")[0]
+
+        # Нормализуем имена колонок для всех типов
+        if cab_type == "green":
+            df = df.rename(
+                columns={
+                    "lpep_pickup_datetime": "pickup_datetime",
+                    "lpep_dropoff_datetime": "dropoff_datetime",
+                }
+            )
+        else:  # yellow taxi
+            df = df.rename(
+                columns={
+                    "tpep_pickup_datetime": "pickup_datetime",
+                    "tpep_dropoff_datetime": "dropoff_datetime",
+                }
+            )
+
         df["cab_type"] = cab_type
 
-        df["tpep_pickup_datetime"] = pd.to_datetime(
-            df["tpep_pickup_datetime"], errors="coerce"
-        )
-        df["tpep_dropoff_datetime"] = pd.to_datetime(
-            df["tpep_dropoff_datetime"], errors="coerce"
-        )
-        df = df.dropna(subset=["tpep_pickup_datetime", "tpep_dropoff_datetime"])
+        # Даты
+        df["pickup_datetime"] = pd.to_datetime(df["pickup_datetime"], errors="coerce")
+        df["dropoff_datetime"] = pd.to_datetime(df["dropoff_datetime"], errors="coerce")
+        df = df.dropna(subset=["pickup_datetime", "dropoff_datetime"])
 
+        # Числовые колонки
         numeric_cols = [
             "passenger_count",
             "trip_distance",
@@ -83,14 +98,14 @@ with DAG(
         np.random.seed(42)
         df["driver_id"] = np.random.randint(1, 101, size=len(df))
         df["trip_time_min"] = (
-            df["tpep_dropoff_datetime"] - df["tpep_pickup_datetime"]
+            df["dropoff_datetime"] - df["pickup_datetime"]
         ).dt.total_seconds() / 60
 
         df = df[
             [
                 "cab_type",
-                "tpep_pickup_datetime",
-                "tpep_dropoff_datetime",
+                "pickup_datetime",
+                "dropoff_datetime",
                 "driver_id",
                 "passenger_count",
                 "trip_distance",
