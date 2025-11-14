@@ -48,10 +48,14 @@ with DAG(
             resp.raise_for_status()
             with open(local_path, "wb") as f:
                 f.write(resp.content)
+        else:
+            print(f"File exists locally: {local_path}")
 
         # Загрузка в S3 через s3fs
         if not fs.exists(s3_path):
             fs.put(local_path, s3_path)
+        else:
+            print(f"File already exists in S3: {s3_path}")
 
         return local_path
 
