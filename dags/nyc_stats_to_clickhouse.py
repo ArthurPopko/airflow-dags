@@ -7,8 +7,8 @@ import requests
 import s3fs
 from airflow import DAG
 from airflow.decorators import task
+from airflow.hooks.base import BaseHook
 from airflow.models import Variable
-from airflow_clickhouse_plugin.hooks.clickhouse import ClickHouseHook
 from clickhouse_driver import Client
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
@@ -125,15 +125,13 @@ with DAG(
     def load_month(file_path: str):
         df = pd.read_parquet(file_path)
 
-        hook = ClickHouseHook(clickhouse_conn_id="click")
-        conn_params = hook.get_connection(hook.clickhouse_conn_id)
-
+        conn = BaseHook.get_connection("click")
         client = Client(
-            host=conn_params.host,
-            port=int(conn_params.port or 9000),
-            user=conn_params.login,
-            password=conn_params.password,
-            database=conn_params.schema or "default",
+            host=conn.host,
+            port=int(conn.port or 9000),
+            user=conn.login,
+            password=conn.password,
+            database=conn.schema or "staging",
         )
 
         batch_size = 5000
