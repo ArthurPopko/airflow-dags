@@ -9,6 +9,7 @@ from airflow import DAG
 from airflow.decorators import task
 from airflow.models import Variable
 from airflow_clickhouse_plugin.hooks.clickhouse import ClickHouseHook
+from clickhouse_driver import Client
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 DAG_CONFIG = Variable.get(f"{DAG_ID.lower()}__config", {}, deserialize_json=True)
@@ -127,19 +128,21 @@ with DAG(
 
     @task
     def load_month(file_path: str):
-        hook = ClickHouseHook(clickhouse_conn_id="click")
         df = pd.read_parquet(file_path)
 
-        chunk_size = 200_000
-        total = len(df)
+        # Берём connection из Airflow
+        hook = ClickHouseHook(clickhouse_conn_id="click")
+        conn_params = hook.get_connection(hook.clickhouse_conn_id)
 
-        for start in range(0, total, chunk_size):
-            chunk = df.iloc[start : start + chunk_size]
-            hook.insert_dataframe(table=f"{SCHEMA}.{TABLE}", df=chunk)
-        print(f"Inserted {total} rows")
+        client = Client(
+            host=conn_params.host,
+            port=int(conn_params.port or 9000),
+            user=conn_params.login,
+            password=conn_params.password,
+            database=conn_params.schema or "default",
+        )
 
-    for cab in CAB_TYPES:
-        for month in MONTHS:
-            raw_file = download_file(cab, month)
-            clean_file = prepare_month(raw_file)
-            load_month(clean_file)
+        batch_size = 5000
+        for i in range(0, len(df), batch_size):
+            batch = df.iloc[i : i + batch_size].to_dict("records")
+            client.execute("INSERT INTO nyc_tlc_tripdata_local VALUES", batch)
