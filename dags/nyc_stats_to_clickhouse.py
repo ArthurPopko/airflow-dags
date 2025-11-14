@@ -10,7 +10,6 @@ from airflow.decorators import task
 from airflow.models import Variable
 from airflow_clickhouse_plugin.hooks.clickhouse import ClickHouseHook
 
-# --- Настройки ---
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 DAG_CONFIG = Variable.get(f"{DAG_ID.lower()}__config", {}, deserialize_json=True)
 
@@ -19,59 +18,42 @@ S3_BUCKET = DAG_CONFIG.get("S3_BUCKET")
 BASE_URL = DAG_CONFIG.get("BASE_URL")
 MONTHS = DAG_CONFIG.get("MONTHS")
 CAB_TYPES = ["yellow", "green"]
-LOCAL_DIR = "/tmp/nyc_tlc_data"
+LOCAL_DIR = "/etl_cache/nyc"
 SCHEMA = "staging"
 TABLE = "nyc_tlc_tripdata_local"
 
 os.makedirs(LOCAL_DIR, exist_ok=True)
 fs = s3fs.S3FileSystem(anon=False)
 
-# --- DAG ---
 with DAG(
     dag_id="nyc_tlc_etl_clickhouse",
     start_date=datetime(2025, 11, 1),
     schedule="@monthly",
     max_active_tasks=1,
     catchup=False,
-    tags=["nyc", "etl"]
+    tags=["nyc", "etl"],
 ) as dag:
 
     @task
-    def download_and_upload(cab: str, month: str):
+    def download_file(cab: str, month: str):
         file_name = f"{cab}_tripdata_{month}.parquet"
         local_path = os.path.join(LOCAL_DIR, file_name)
-        s3_path = f"s3://{S3_BUCKET}/{file_name}"
 
-        # Скачивание через requests
         if not os.path.exists(local_path):
             url = f"{BASE_URL}/{file_name}"
             resp = requests.get(url)
             resp.raise_for_status()
             with open(local_path, "wb") as f:
                 f.write(resp.content)
-        else:
-            print(f"File exists locally: {local_path}")
-
-        # Загрузка в S3 через s3fs
-        if not fs.exists(s3_path):
-            fs.put(local_path, s3_path)
-        else:
-            print(f"File already exists in S3: {s3_path}")
-
         return local_path
 
     @task
-    def prepare_data(files: list):
-        all_dfs = []
-        for file in files:
-            df_month = pd.read_parquet(file)
-            cab_type = os.path.basename(file).split("_")[0]
-            df_month["cab_type"] = cab_type
-            all_dfs.append(df_month)
+    def prepare_month(file_path: str):
+        df = pd.read_parquet(file_path)
 
-        df = pd.concat(all_dfs, ignore_index=True)
+        cab_type = os.path.basename(file_path).split("_")[0]
+        df["cab_type"] = cab_type
 
-        # Очистка данных
         df["tpep_pickup_datetime"] = pd.to_datetime(
             df["tpep_pickup_datetime"], errors="coerce"
         )
@@ -91,12 +73,11 @@ with DAG(
         df[numeric_cols] = df[numeric_cols].apply(pd.to_numeric, errors="coerce")
         df = df.dropna(subset=numeric_cols)
 
-        df["passenger_count"] = df["passenger_count"].astype(int)
-        df["PULocationID"] = df["PULocationID"].astype(int)
-        df["DOLocationID"] = df["DOLocationID"].astype(int)
-
         df = df.query(
-            "1 <= passenger_count <= 9 & 0 < trip_distance < 100 & 0 < fare_amount < 1000 & 0 < total_amount < 1000"
+            "1 <= passenger_count <= 9 & "
+            "0 < trip_distance < 100 & "
+            "0 < fare_amount < 1000 & "
+            "0 < total_amount < 1000"
         )
 
         np.random.seed(42)
@@ -105,7 +86,7 @@ with DAG(
             df["tpep_dropoff_datetime"] - df["tpep_pickup_datetime"]
         ).dt.total_seconds() / 60
 
-        df_clickhouse_clean = df[
+        df = df[
             [
                 "cab_type",
                 "tpep_pickup_datetime",
@@ -121,16 +102,27 @@ with DAG(
             ]
         ]
 
-        output_path = os.path.join(LOCAL_DIR, "clickhouse_ready.parquet")
-        df_clickhouse_clean.to_parquet(output_path, index=False)
+        clean_name = os.path.basename(file_path).replace(".parquet", "_clean.parquet")
+        output_path = os.path.join(LOCAL_DIR, clean_name)
+        df.to_parquet(output_path, index=False)
+
         return output_path
 
     @task
-    def load_to_clickhouse(file_path: str):
+    def load_month(file_path: str):
         hook = ClickHouseHook(clickhouse_conn_id="click")
-        hook.insert_dataframe(table=f"{SCHEMA}.{TABLE}", df=pd.read_parquet(file_path))
+        df = pd.read_parquet(file_path)
 
-    # --- Flow ---
-    files = [download_and_upload(cab, month) for cab in CAB_TYPES for month in MONTHS]
-    clickhouse_file = prepare_data(files)
-    load_to_clickhouse(clickhouse_file)
+        chunk_size = 200_000
+        total = len(df)
+
+        for start in range(0, total, chunk_size):
+            chunk = df.iloc[start : start + chunk_size]
+            hook.insert_dataframe(table=f"{SCHEMA}.{TABLE}", df=chunk)
+        print(f"Inserted {total} rows")
+
+    for cab in CAB_TYPES:
+        for month in MONTHS:
+            raw_file = download_file(cab, month)
+            clean_file = prepare_month(raw_file)
+            load_month(clean_file)
