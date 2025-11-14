@@ -152,7 +152,9 @@ with DAG(
             ]
 
         client.execute(
-            f"INSERT INTO {SCHEMA}.{TABLE} ({', '.join(cols)}) VALUES", batch
+            f"INSERT INTO {SCHEMA}.{TABLE} ({', '.join(cols)}) VALUES",
+            batch,
+            types_check=True,
         )
 
     # --- Flow по месяцам и типу такси ---
