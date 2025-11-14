@@ -8,7 +8,7 @@ import s3fs
 from airflow import DAG
 from airflow.models import Variable
 from airflow.sdk.bases.hook import BaseHook
-from airflow.sdk.task import task
+from airflow.hooks.base.BaseHook import task
 from clickhouse_driver import Client
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
