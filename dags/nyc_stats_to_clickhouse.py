@@ -137,7 +137,23 @@ with DAG(
         batch_size = 5000
         for i in range(0, len(df), batch_size):
             batch = df.iloc[i : i + batch_size].to_dict("records")
-            client.execute(f"{SCHEMA}.{TABLE}", batch)
+            cols = [
+                "cab_type",
+                "pickup_datetime",
+                "dropoff_datetime",
+                "driver_id",
+                "passenger_count",
+                "trip_distance",
+                "PULocationID",
+                "DOLocationID",
+                "fare_amount",
+                "total_amount",
+                "trip_time_min",
+            ]
+
+        client.execute(
+            f"INSERT INTO {SCHEMA}.{TABLE} ({', '.join(cols)}) VALUES", batch
+        )
 
     # --- Flow по месяцам и типу такси ---
     for cab in CAB_TYPES:
