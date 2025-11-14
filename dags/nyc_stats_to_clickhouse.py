@@ -31,7 +31,7 @@ with DAG(
     dag_id="nyc_tlc_etl_clickhouse",
     start_date=datetime(2025, 11, 1),
     schedule="@monthly",
-    max_active_tasks=2,
+    max_active_tasks=1,
     catchup=False,
     tags=["nyc", "etl"]
 ) as dag:
