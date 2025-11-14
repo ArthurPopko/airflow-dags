@@ -26,7 +26,7 @@ os.makedirs(LOCAL_DIR, exist_ok=True)
 fs = s3fs.S3FileSystem(anon=False)
 
 with DAG(
-    dag_id="nyc_tlc_etl_clickhouse",
+    dag_id=DAG_ID,
     start_date=datetime(2025, 11, 1),
     schedule="@monthly",
     max_active_tasks=1,
