@@ -6,8 +6,8 @@ import pandas as pd
 import requests
 import s3fs
 from airflow import DAG
-from airflow.decorators.task import task
-from airflow.hooks.base.BaseHook import BaseHook
+from airflow.decorators import task
+from airflow.hooks.base import BaseHook
 from airflow.models import Variable
 from clickhouse_driver import Client
 
