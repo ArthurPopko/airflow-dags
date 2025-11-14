@@ -45,6 +45,8 @@ with DAG(
             resp.raise_for_status()
             with open(local_path, "wb") as f:
                 f.write(resp.content)
+        else:
+            print(f"File exists locally: {local_path}")
         return local_path
 
     @task
