@@ -42,21 +42,19 @@ with DAG(
 
         if not os.path.exists(local_path):
             url = f"{BASE_URL}/{file_name}"
-            resp = requests.get(url)
+            resp = requests.get(url, stream=True)
             resp.raise_for_status()
             with open(local_path, "wb") as f:
-                f.write(resp.content)
-        else:
-            print(f"File exists locally: {local_path}")
+                for chunk in resp.iter_content(chunk_size=1024 * 1024):
+                    f.write(chunk)
         return local_path
 
     @task
     def prepare_month(file_path: str):
         df = pd.read_parquet(file_path)
-
         cab_type = os.path.basename(file_path).split("_")[0]
 
-        # Нормализуем имена колонок для всех типов
+        # Нормализация колонок
         if cab_type == "green":
             df = df.rename(
                 columns={
@@ -64,7 +62,7 @@ with DAG(
                     "lpep_dropoff_datetime": "dropoff_datetime",
                 }
             )
-        else:  # yellow taxi
+        else:
             df = df.rename(
                 columns={
                     "tpep_pickup_datetime": "pickup_datetime",
@@ -73,13 +71,10 @@ with DAG(
             )
 
         df["cab_type"] = cab_type
-
-        # Даты
         df["pickup_datetime"] = pd.to_datetime(df["pickup_datetime"], errors="coerce")
         df["dropoff_datetime"] = pd.to_datetime(df["dropoff_datetime"], errors="coerce")
         df = df.dropna(subset=["pickup_datetime", "dropoff_datetime"])
 
-        # Числовые колонки
         numeric_cols = [
             "passenger_count",
             "trip_distance",
@@ -120,17 +115,16 @@ with DAG(
             ]
         ]
 
-        clean_name = os.path.basename(file_path).replace(".parquet", "_clean.parquet")
-        output_path = os.path.join(LOCAL_DIR, clean_name)
-        df.to_parquet(output_path, index=False)
-
-        return output_path
+        clean_path = os.path.join(
+            LOCAL_DIR, os.path.basename(file_path).replace(".parquet", "_clean.parquet")
+        )
+        df.to_parquet(clean_path, index=False)
+        return clean_path
 
     @task
     def load_month(file_path: str):
         df = pd.read_parquet(file_path)
 
-        # Берём connection из Airflow
         hook = ClickHouseHook(clickhouse_conn_id="click")
         conn_params = hook.get_connection(hook.clickhouse_conn_id)
 
@@ -145,4 +139,11 @@ with DAG(
         batch_size = 5000
         for i in range(0, len(df), batch_size):
             batch = df.iloc[i : i + batch_size].to_dict("records")
-            client.execute("INSERT INTO nyc_tlc_tripdata_local VALUES", batch)
+            client.execute(f"{SCHEMA}.{TABLE}", batch)
+
+    # --- Flow по месяцам и типу такси ---
+    for cab in CAB_TYPES:
+        for month in MONTHS:
+            file_path = download_file(cab, month)
+            clean_file = prepare_month(file_path)
+            load_month(clean_file)
