@@ -30,3 +30,5 @@ from staging.nyc_tlc_tripdata_local
 group by
     driver_id
 order by driver_id;
+
+SELECT DISTINCT cab_type FROM staging.nyc_tlc_tripdata_local;

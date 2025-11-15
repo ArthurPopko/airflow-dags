@@ -67,27 +67,38 @@ with DAG(
         file_name = f"{cab}_tripdata_{month}.parquet"
         local_path = os.path.join(LOCAL_DIR, file_name)
 
-        if not os.path.exists(local_path):
-            url = f"{BASE_URL}/{file_name}"
+        if os.path.exists(local_path):
+            logging.info(
+                f"[DOWNLOAD] File {local_path} already exists. Skipping download."
+            )
+            return local_path
+
+        url = f"{BASE_URL}/{file_name}"
+        logging.info(f"[DOWNLOAD] Starting download: {url}")
+        try:
             resp = requests.get(url, stream=True)
             resp.raise_for_status()
             with open(local_path, "wb") as f:
                 for chunk in resp.iter_content(chunk_size=1024 * 1024):
                     f.write(chunk)
-        else:
-            logging.warning(f"File {local_path} already exists. Skipping download.")
+            logging.info(f"[DOWNLOAD] Finished downloading {file_name}")
+        except Exception as e:
+            logging.error(f"[DOWNLOAD] Failed to download {file_name}: {e}")
+            raise
         return local_path
 
     @task
     def prepare_month(file_path: str):
-
+        logging.info(f"[PREPARE] Reading parquet file {file_path}")
         df_iter = pd.read_parquet(file_path, engine="pyarrow")
+        logging.info(f"[PREPARE] Initial rows: {len(df_iter)}")
 
-        # Генерируем driver_id
+        # Генерация driver_id
         np.random.seed(42)
         df_iter["driver_id"] = np.random.randint(1, 1001, size=len(df_iter))
+        logging.info("[PREPARE] Generated driver_id")
 
-        # Приводим pickup/dropoff к datetime
+        # Приведение pickup/dropoff к datetime
         df_iter["pickup_datetime"] = pd.to_datetime(
             df_iter.get("lpep_pickup_datetime", df_iter.get("tpep_pickup_datetime")),
             errors="coerce",
@@ -98,31 +109,27 @@ with DAG(
         )
 
         # Дропаем строки с некорректными датами
+        before_drop = len(df_iter)
         df_iter = df_iter.dropna(subset=["pickup_datetime", "dropoff_datetime"])
+        logging.info(
+            f"[PREPARE] Dropped {before_drop - len(df_iter)} rows due to invalid dates"
+        )
 
-        # Функция для конвертации в snake_case
-        def to_snake_case(name):
-            name = re.sub(r"([A-Z]+)", r"_\1", name).lower()
-            name = re.sub(r"^_", "", name)  # удаляем ведущий _
-            return name
+        # Конвертация колонок в snake_case
+        df_iter.columns = [
+            re.sub(r"^_", "", re.sub(r"([A-Z]+)", r"_\1", col).lower())
+            for col in df_iter.columns
+        ]
 
-        df_iter.columns = [to_snake_case(col) for col in df_iter.columns]
-
-        # Все колонки, содержащие "_id" — UInt32
+        # Преобразование типов
         for col in df_iter.columns:
             if "_id" in col:
                 df_iter[col] = df_iter[col].astype("UInt32")
-
-        # passenger_count — UInt8
         if "passenger_count" in df_iter.columns:
             df_iter["passenger_count"] = df_iter["passenger_count"].astype("UInt8")
-
-        # payment_type и trip_type — UInt8
         for col in ["payment_type", "trip_type"]:
             if col in df_iter.columns:
                 df_iter[col] = df_iter[col].astype("UInt8")
-
-        # Остальные числовые поля — float32
         float_cols = [
             "trip_distance",
             "fare_amount",
@@ -139,26 +146,26 @@ with DAG(
         for col in float_cols:
             if col in df_iter.columns:
                 df_iter[col] = df_iter[col].astype("float32")
-
-        # Строковые поля
         str_cols = ["cab_type", "store_and_fwd_flag"]
         for col in str_cols:
             if col in df_iter.columns:
                 df_iter[col] = df_iter[col].astype("string")
 
-        # Сохраняем только существующие колонки
+        # Оставляем только нужные колонки
         df_iter = df_iter[[col for col in COLUMNS if col in df_iter.columns]]
+        logging.info(f"[PREPARE] Columns after processing: {df_iter.columns.tolist()}")
 
         # Сохраняем в parquet
         clean_path = os.path.join(
-            LOCAL_DIR,
-            os.path.basename(file_path).replace(".parquet", "_clean.parquet"),
+            LOCAL_DIR, os.path.basename(file_path).replace(".parquet", "_clean.parquet")
         )
         df_iter.to_parquet(clean_path, index=False)
+        logging.info(f"[PREPARE] Saved cleaned parquet to {clean_path}")
         return clean_path
 
     @task
     def load_month(file_path: str):
+        logging.info(f"[LOAD] Loading file {file_path} into ClickHouse")
         conn = BaseHook.get_connection("click")
         client = Client(
             host=conn.host,
@@ -169,22 +176,26 @@ with DAG(
         )
 
         df = pd.read_parquet(file_path)
-
         cols = [col for col in COLUMNS if col in df.columns]
+        logging.info(f"[LOAD] Columns for insert: {cols}")
 
-        # Загружаем батчами, чтобы экономить память
         batch_size = 5000
-        for i in range(0, len(df), batch_size):
+        total_rows = len(df)
+        logging.info(f"[LOAD] Total rows to insert: {total_rows}")
+        for i in range(0, total_rows, batch_size):
             batch = df.iloc[i : i + batch_size].to_dict("records")
             client.execute(
                 f"INSERT INTO {SCHEMA}.{TABLE} ({', '.join(cols)}) VALUES",
                 batch,
                 types_check=True,
             )
-
-    # --- Flow ---
-    for cab in CAB_TYPES:
-        for month in MONTHS:
-            file_path = download_file(cab, month)
-            clean_file = prepare_month(file_path)
-            load_month(clean_file)
+            logging.info(
+                f"[LOAD] Inserted rows {i} - {min(i + batch_size, total_rows)}"
+            )
+        logging.info(f"[LOAD] Finished inserting {total_rows} rows")
+        # --- Flow ---
+        for cab in CAB_TYPES:
+            for month in MONTHS:
+                file_path = download_file(cab, month)
+                clean_file = prepare_month(file_path)
+                load_month(clean_file)
