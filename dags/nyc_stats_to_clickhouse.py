@@ -11,6 +11,7 @@ from airflow import DAG
 from airflow.decorators import task
 from airflow.hooks.base import BaseHook
 from airflow.models import Variable
+from airflow.utils.task_group import TaskGroup
 from clickhouse_driver import Client
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
@@ -54,16 +55,12 @@ os.makedirs(LOCAL_DIR, exist_ok=True)
 fs = s3fs.S3FileSystem(anon=False)
 
 
-
 @task
 def download_file(cab: str, month: str):
     file_name = f"{cab}_tripdata_{month}.parquet"
     local_path = os.path.join(LOCAL_DIR, file_name)
-
     if os.path.exists(local_path):
-        logging.info(
-            f"[DOWNLOAD] File {local_path} already exists. Skipping download."
-        )
+        logging.info(f"[DOWNLOAD] File {local_path} already exists. Skipping download.")
         return local_path
 
     url = f"{BASE_URL}/{file_name}"
@@ -80,18 +77,17 @@ def download_file(cab: str, month: str):
         raise
     return local_path
 
+
 @task
 def prepare_month(file_path: str):
     logging.info(f"[PREPARE] Reading parquet file {file_path}")
     df_iter = pd.read_parquet(file_path, engine="pyarrow")
     logging.info(f"[PREPARE] Initial rows: {len(df_iter)}")
 
-    # Генерация driver_id
     np.random.seed(42)
     df_iter["driver_id"] = np.random.randint(1, 1001, size=len(df_iter))
     logging.info("[PREPARE] Generated driver_id")
 
-    # Приведение pickup/dropoff к datetime
     df_iter["pickup_datetime"] = pd.to_datetime(
         df_iter.get("lpep_pickup_datetime", df_iter.get("tpep_pickup_datetime")),
         errors="coerce",
@@ -101,20 +97,17 @@ def prepare_month(file_path: str):
         errors="coerce",
     )
 
-    # Дропаем строки с некорректными датами
     before_drop = len(df_iter)
     df_iter = df_iter.dropna(subset=["pickup_datetime", "dropoff_datetime"])
     logging.info(
         f"[PREPARE] Dropped {before_drop - len(df_iter)} rows due to invalid dates"
     )
 
-    # Конвертация колонок в snake_case
     df_iter.columns = [
         re.sub(r"^_", "", re.sub(r"([A-Z]+)", r"_\1", col).lower())
         for col in df_iter.columns
     ]
 
-    # Преобразование типов
     for col in df_iter.columns:
         if "_id" in col:
             df_iter[col] = df_iter[col].astype("UInt32")
@@ -144,17 +137,16 @@ def prepare_month(file_path: str):
         if col in df_iter.columns:
             df_iter[col] = df_iter[col].astype("string")
 
-    # Оставляем только нужные колонки
     df_iter = df_iter[[col for col in COLUMNS if col in df_iter.columns]]
     logging.info(f"[PREPARE] Columns after processing: {df_iter.columns.tolist()}")
 
-    # Сохраняем в parquet
     clean_path = os.path.join(
         LOCAL_DIR, os.path.basename(file_path).replace(".parquet", "_clean.parquet")
     )
     df_iter.to_parquet(clean_path, index=False)
     logging.info(f"[PREPARE] Saved cleaned parquet to {clean_path}")
     return clean_path
+
 
 @task
 def load_month(file_path: str):
@@ -182,10 +174,9 @@ def load_month(file_path: str):
             batch,
             types_check=True,
         )
-        logging.info(
-            f"[LOAD] Inserted rows {i} - {min(i + batch_size, total_rows)}"
-        )
+        logging.info(f"[LOAD] Inserted rows {i} - {min(i + batch_size, total_rows)}")
     logging.info(f"[LOAD] Finished inserting {total_rows} rows")
+
 
 with DAG(
     dag_id=DAG_ID,
@@ -198,8 +189,8 @@ with DAG(
 
     for cab in CAB_TYPES:
         for month in MONTHS:
-            download = download_file(cab, month)
-            clean = prepare_month(download)
-            load = load_month(clean)
-            
-            download >> clean >> load
+            with TaskGroup(group_id=f"{cab}_{month}") as tg:
+                download = download_file(cab, month)
+                clean = prepare_month(download)
+                load = load_month(clean)
+                download >> clean >> load
