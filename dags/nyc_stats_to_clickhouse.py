@@ -26,30 +26,29 @@ SCHEMA = "staging"
 TABLE = "nyc_tlc_tripdata_local"
 COLUMNS = [
     "driver_id",
-    "pickup_datetime",
-    "dropoff_datetime",
-    "passenger_count",
-    "trip_distance",
     "pu_location_id",
     "do_location_id",
+    "vendor_id",
+    "ratecode_id",
+    "pickup_datetime",
+    "dropoff_datetime",
+    "trip_distance",
     "fare_amount",
     "total_amount",
-    "cab_type",
-    "vendor_id",
-    "store_and_fwd_flag",
-    "ratecode_id",
     "extra",
     "mta_tax",
     "tip_amount",
     "tolls_amount",
     "ehail_fee",
     "improvement_surcharge",
-    "payment_type",
-    "trip_type",
     "congestion_surcharge",
     "cbd_congestion_fee",
+    "passenger_count",
+    "payment_type",
+    "trip_type",
+    "cab_type",
+    "store_and_fwd_flag",
 ]
-
 
 os.makedirs(LOCAL_DIR, exist_ok=True)
 fs = s3fs.S3FileSystem(anon=False)
