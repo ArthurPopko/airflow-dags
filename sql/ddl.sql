@@ -15,16 +15,16 @@ TABLE staging.nyc_tlc_tripdata_local (
     vendor_id UInt32, -- ID компании-владельца
     store_and_fwd_flag Nullable (String), -- флаг сохранения и пересылки данных
     ratecode_id Nullable (UInt32), -- код тарифа
-    extra Float32, -- дополнительные сборы
-    mta_tax Float32, -- налог MTA
-    tip_amount Float32, -- чаевые
-    tolls_amount Float32, -- сборы за платные дороги
+    extra Nullable (Float32), -- дополнительные сборы
+    mta_tax Nullable (Float32), -- налог MTA
+    tip_amount Nullable (Float32), -- чаевые
+    tolls_amount Nullable (Float32), -- сборы за платные дороги
     ehail_fee Nullable (Float32), -- сбор за электронный заказ (может быть 0)
-    improvement_surcharge Float32, -- дополнительная плата
+    improvement_surcharge Nullable (Float32), -- дополнительная плата
     payment_type Nullable (UInt8), -- тип оплаты (нал, карта, прочее)
     trip_type Nullable (UInt8), -- тип поездки
     congestion_surcharge Nullable (Float32), -- плата за пробки, может быть пустой
-    cbd_congestion_fee Float32, -- плата за въезд в центр
+    cbd_congestion_fee Nullable (Float32), -- плата за въезд в центр
     _etl_timestamp DateTime DEFAULT now() -- время вставки в таблицу
 ) ENGINE = ReplacingMergeTree (_etl_timestamp) -- позволяет заменять дубликаты
 PARTITION BY
