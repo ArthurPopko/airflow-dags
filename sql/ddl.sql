@@ -1,21 +1,31 @@
-CREATE DATABASE staging;
+CREATE DATABASE IF NOT EXISTS staging;
 
 CREATE OR REPLACE TABLE staging.nyc_tlc_tripdata_local (
-    cab_type String,
-    pickup_datetime DateTime64 (3, 'UTC'),
-    dropoff_datetime DateTime64 (3, 'UTC'),
     driver_id UInt32,
-    passenger_count UInt8,
+    pickup_datetime DateTime64(3, 'UTC'),
+    dropoff_datetime DateTime64(3, 'UTC'),
+    passenger_count Nullable(UInt8),
     trip_distance Float32,
-    PULocationID UInt16,
-    DOLocationID UInt16,
+    pu_location_id UInt32,
+    do_location_id UInt32,
     fare_amount Float32,
     total_amount Float32,
-    trip_time_min Float32,
+    cab_type String,
+    vendor_id UInt32,
+    store_and_fwd_flag Nullable(String),
+    ratecode_id UInt32,
+    extra Float32,
+    mta_tax Float32,
+    tip_amount Float32,
+    tolls_amount Float32,
+    ehail_fee Float32,
+    improvement_surcharge Float32,
+    payment_type UInt8,
+    trip_type UInt8,
+    congestion_surcharge Nullable(Float32),
+    cbd_congestion_fee Float32,
     _etl_timestamp DateTime DEFAULT now()
-) ENGINE = MergeTree
-PARTITION BY
-    toYYYYMM (pickup_datetime)
-ORDER BY (
-        cab_type, pickup_datetime
-    ) SETTINGS index_granularity = 8192;
+) ENGINE = ReplacingMergeTree(_etl_timestamp)
+PARTITION BY toYYYYMM(pickup_datetime)
+ORDER BY (driver_id, pickup_datetime)
+SETTINGS index_granularity = 8192;

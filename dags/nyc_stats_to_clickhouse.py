@@ -1,4 +1,6 @@
+import logging
 import os
+import re
 from datetime import datetime
 
 import numpy as np
@@ -22,6 +24,32 @@ CAB_TYPES = ["yellow", "green"]
 LOCAL_DIR = "/etl_cache/nyc"
 SCHEMA = "staging"
 TABLE = "nyc_tlc_tripdata_local"
+COLUMNS = [
+    "driver_id",
+    "pickup_datetime",
+    "dropoff_datetime",
+    "passenger_count",
+    "trip_distance",
+    "pu_location_id",
+    "do_location_id",
+    "fare_amount",
+    "total_amount",
+    "cab_type",
+    "vendor_id",
+    "store_and_fwd_flag",
+    "ratecode_id",
+    "extra",
+    "mta_tax",
+    "tip_amount",
+    "tolls_amount",
+    "ehail_fee",
+    "improvement_surcharge",
+    "payment_type",
+    "trip_type",
+    "congestion_surcharge",
+    "cbd_congestion_fee",
+]
+
 
 os.makedirs(LOCAL_DIR, exist_ok=True)
 fs = s3fs.S3FileSystem(anon=False)
@@ -47,65 +75,85 @@ with DAG(
             with open(local_path, "wb") as f:
                 for chunk in resp.iter_content(chunk_size=1024 * 1024):
                     f.write(chunk)
+        else:
+            logging.warning(f"File {local_path} already exists. Skipping download.")
         return local_path
 
     @task
     def prepare_month(file_path: str):
+
         df_iter = pd.read_parquet(file_path, engine="pyarrow")
 
-        cab_type = os.path.basename(file_path).split("_")[0]
-        if cab_type == "green":
-            df_iter = df_iter.rename(
-                columns={
-                    "lpep_pickup_datetime": "pickup_datetime",
-                    "lpep_dropoff_datetime": "dropoff_datetime",
-                }
-            )
-        else:
-            df_iter = df_iter.rename(
-                columns={
-                    "tpep_pickup_datetime": "pickup_datetime",
-                    "tpep_dropoff_datetime": "dropoff_datetime",
-                }
-            )
+        # Генерируем driver_id
+        np.random.seed(42)
+        df_iter["driver_id"] = np.random.randint(1, 1001, size=len(df_iter))
 
-        df_iter["cab_type"] = cab_type
+        # Приводим pickup/dropoff к datetime
         df_iter["pickup_datetime"] = pd.to_datetime(
-            df_iter["pickup_datetime"], errors="coerce"
+            df_iter.get("lpep_pickup_datetime", df_iter.get("tpep_pickup_datetime")),
+            errors="coerce",
         )
         df_iter["dropoff_datetime"] = pd.to_datetime(
-            df_iter["dropoff_datetime"], errors="coerce"
+            df_iter.get("lpep_dropoff_datetime", df_iter.get("tpep_dropoff_datetime")),
+            errors="coerce",
         )
+
+        # Дропаем строки с некорректными датами
         df_iter = df_iter.dropna(subset=["pickup_datetime", "dropoff_datetime"])
 
-        numeric_cols = [
-            "passenger_count",
+        # Функция для конвертации в snake_case
+        def to_snake_case(name):
+            name = re.sub(r"([A-Z]+)", r"_\1", name).lower()
+            name = re.sub(r"^_", "", name)  # удаляем ведущий _
+            return name
+
+        df_iter.columns = [to_snake_case(col) for col in df_iter.columns]
+
+        # Все колонки, содержащие "_id" — UInt32
+        for col in df_iter.columns:
+            if "_id" in col:
+                df_iter[col] = df_iter[col].astype("UInt32")
+
+        # passenger_count — UInt8
+        if "passenger_count" in df_iter.columns:
+            df_iter["passenger_count"] = df_iter["passenger_count"].astype("UInt8")
+
+        # payment_type и trip_type — UInt8
+        for col in ["payment_type", "trip_type"]:
+            if col in df_iter.columns:
+                df_iter[col] = df_iter[col].astype("UInt8")
+
+        # Остальные числовые поля — float32
+        float_cols = [
             "trip_distance",
             "fare_amount",
             "total_amount",
-            "PULocationID",
-            "DOLocationID",
+            "extra",
+            "mta_tax",
+            "tip_amount",
+            "tolls_amount",
+            "ehail_fee",
+            "improvement_surcharge",
+            "congestion_surcharge",
+            "cbd_congestion_fee",
         ]
-        df_iter[numeric_cols] = df_iter[numeric_cols].apply(
-            pd.to_numeric, errors="coerce"
-        )
-        df_iter = df_iter.dropna(subset=numeric_cols)
+        for col in float_cols:
+            if col in df_iter.columns:
+                df_iter[col] = df_iter[col].astype("float32")
 
-        df_iter = df_iter.query(
-            "1 <= passenger_count <= 9 & "
-            "0 < trip_distance < 100 & "
-            "0 < fare_amount < 1000 & "
-            "0 < total_amount < 1000"
-        )
+        # Строковые поля
+        str_cols = ["cab_type", "store_and_fwd_flag"]
+        for col in str_cols:
+            if col in df_iter.columns:
+                df_iter[col] = df_iter[col].astype("string")
 
-        np.random.seed(42)
-        df_iter["driver_id"] = np.random.randint(1, 101, size=len(df_iter))
-        df_iter["trip_time_min"] = (
-            df_iter["dropoff_datetime"] - df_iter["pickup_datetime"]
-        ).dt.total_seconds() / 60
+        # Сохраняем только существующие колонки
+        df_iter = df_iter[[col for col in COLUMNS if col in df_iter.columns]]
 
+        # Сохраняем в parquet
         clean_path = os.path.join(
-            LOCAL_DIR, os.path.basename(file_path).replace(".parquet", "_clean.parquet")
+            LOCAL_DIR,
+            os.path.basename(file_path).replace(".parquet", "_clean.parquet"),
         )
         df_iter.to_parquet(clean_path, index=False)
         return clean_path
@@ -123,29 +171,7 @@ with DAG(
 
         df = pd.read_parquet(file_path)
 
-        # Приводим типы к ClickHouse
-        df["passenger_count"] = df["passenger_count"].astype("uint8")
-        df["driver_id"] = df["driver_id"].astype("uint32")
-        df["PULocationID"] = df["PULocationID"].astype("uint16")
-        df["DOLocationID"] = df["DOLocationID"].astype("uint16")
-        df["trip_distance"] = df["trip_distance"].astype("float32")
-        df["fare_amount"] = df["fare_amount"].astype("float32")
-        df["total_amount"] = df["total_amount"].astype("float32")
-        df["trip_time_min"] = df["trip_time_min"].astype("float32")
-
-        cols = [
-            "cab_type",
-            "pickup_datetime",
-            "dropoff_datetime",
-            "driver_id",
-            "passenger_count",
-            "trip_distance",
-            "PULocationID",
-            "DOLocationID",
-            "fare_amount",
-            "total_amount",
-            "trip_time_min",
-        ]
+        cols = [col for col in COLUMNS if col in df.columns]
 
         # Загружаем батчами, чтобы экономить память
         batch_size = 5000
