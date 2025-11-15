@@ -1,5 +1,5 @@
 -- count
-select count() from staging.nyc_tlc_tripdata_local final;
+select count() from staging.nyc_tlc_tripdata_local;
 
 optimize table staging.nyc_tlc_tripdata_local;
 

@@ -164,7 +164,7 @@ def insert_month(file_path: str):
     cols = [col for col in COLUMNS if col in df.columns]
     logging.info(f"[LOAD] Columns for insert: {cols}")
 
-    batch_size = 500000
+    batch_size = 100000
     total_rows = len(df)
     batch_num = total_rows/batch_size
     count = 0
