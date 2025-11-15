@@ -193,9 +193,10 @@ with DAG(
                 f"[LOAD] Inserted rows {i} - {min(i + batch_size, total_rows)}"
             )
         logging.info(f"[LOAD] Finished inserting {total_rows} rows")
-        # --- Flow ---
-        for cab in CAB_TYPES:
-            for month in MONTHS:
-                file_path = download_file(cab, month)
-                clean_file = prepare_month(file_path)
-                load_month(clean_file)
+
+    # --- Flow ---
+    for cab in CAB_TYPES:
+        for month in MONTHS:
+            file_path = download_file(cab, month)
+            clean_file = prepare_month(file_path)
+            load_month(clean_file)
