@@ -69,7 +69,7 @@ def download_file(cab: str, month: str):
         resp = requests.get(url, stream=True)
         resp.raise_for_status()
         with open(local_path, "wb") as f:
-            for chunk in resp.iter_content(chunk_size=1024 * 1024):
+            for chunk in resp.iter_content(chunk_size=(1024 * 1024) * 10):
                 f.write(chunk)
         logging.info(f"[DOWNLOAD] Finished downloading {file_name}")
     except Exception as e:
@@ -149,7 +149,7 @@ def prepare_month(file_path: str):
 
 
 @task
-def load_month(file_path: str):
+def insert_month(file_path: str):
     logging.info(f"[LOAD] Loading file {file_path} into ClickHouse")
     conn = BaseHook.get_connection("click")
     client = Client(
@@ -166,15 +166,18 @@ def load_month(file_path: str):
 
     batch_size = 500000
     total_rows = len(df)
+    batch_num = total_rows/batch_size
+    count = 0
     logging.info(f"[LOAD] Total rows to insert: {total_rows}")
     for i in range(0, total_rows, batch_size):
         batch = df.iloc[i : i + batch_size].to_dict("records")
         client.execute(
             f"INSERT INTO {SCHEMA}.{TABLE} ({', '.join(cols)}) VALUES",
-            batch
+            batch,
             # types_check=True,
         )
-        logging.info(f"[LOAD] Inserted rows {i} - {min(i + batch_size, total_rows)}")
+        count += 1
+        logging.info(f"Inserted {count}/{batch_num} Batch")
     logging.info(f"[LOAD] Finished inserting {total_rows} rows")
 
 
@@ -192,5 +195,5 @@ with DAG(
             with TaskGroup(group_id=f"{cab}_{month}") as tg:
                 download = download_file(cab, month)
                 clean = prepare_month(download)
-                load = load_month(clean)
-                download >> clean >> load
+                insert = insert_month(clean)
+                download >> clean >> insert
