@@ -1,7 +1,7 @@
 import logging
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -20,9 +20,8 @@ DAG_CONFIG = Variable.get(f"{DAG_ID.lower()}__config", {}, deserialize_json=True
 AWS_REGION = DAG_CONFIG.get("AWS_REGION")
 S3_BUCKET = DAG_CONFIG.get("S3_BUCKET")
 BASE_URL = DAG_CONFIG.get("BASE_URL")
-MONTHS = DAG_CONFIG.get("MONTHS", [])
+MONTHS = DAG_CONFIG.get("MONTHS")
 CAB_TYPES = ["yellow", "green"]
-
 LOCAL_DIR = "/etl_cache/nyc"
 SCHEMA = "staging"
 TABLE = "nyc_tlc_tripdata_local"
@@ -56,7 +55,7 @@ os.makedirs(LOCAL_DIR, exist_ok=True)
 fs = s3fs.S3FileSystem(anon=False)
 
 
-@task(retries=3, retry_delay=timedelta(seconds=30))
+@task
 def download_file(cab: str, month: str):
     file_name = f"{cab}_tripdata_{month}.parquet"
     local_path = os.path.join(LOCAL_DIR, file_name)
@@ -66,48 +65,57 @@ def download_file(cab: str, month: str):
 
     url = f"{BASE_URL}/{file_name}"
     logging.info(f"[DOWNLOAD] Starting download: {url}")
-    resp = requests.get(url, stream=True)
-    resp.raise_for_status()
-    with open(local_path, "wb") as f:
-        for chunk in resp.iter_content(chunk_size=(1024 * 1024) * 10):
-            f.write(chunk)
-    logging.info(f"[DOWNLOAD] Finished downloading {file_name}")
+    try:
+        resp = requests.get(url, stream=True)
+        resp.raise_for_status()
+        with open(local_path, "wb") as f:
+            for chunk in resp.iter_content(chunk_size=(1024 * 1024) * 10):
+                f.write(chunk)
+        logging.info(f"[DOWNLOAD] Finished downloading {file_name}")
+    except Exception as e:
+        logging.error(f"[DOWNLOAD] Failed to download {file_name}: {e}")
+        raise
     return local_path
 
 
-@task(retries=2, retry_delay=timedelta(seconds=10))
+@task
 def prepare_month(file_path: str):
     logging.info(f"[PREPARE] Reading parquet file {file_path}")
-    df = pd.read_parquet(file_path, engine="pyarrow")
+    df_iter = pd.read_parquet(file_path, engine="pyarrow")
+    logging.info(f"[PREPARE] Initial rows: {len(df_iter)}")
 
     np.random.seed(42)
-    df["driver_id"] = np.random.randint(1, 1001, size=len(df))
+    df_iter["driver_id"] = np.random.randint(1, 1001, size=len(df_iter))
     logging.info("[PREPARE] Generated driver_id")
 
-    df["pickup_datetime"] = pd.to_datetime(
-        df.get("lpep_pickup_datetime", df.get("tpep_pickup_datetime")),
+    df_iter["pickup_datetime"] = pd.to_datetime(
+        df_iter.get("lpep_pickup_datetime", df_iter.get("tpep_pickup_datetime")),
         errors="coerce",
     )
-    df["dropoff_datetime"] = pd.to_datetime(
-        df.get("lpep_dropoff_datetime", df.get("tpep_dropoff_datetime")),
+    df_iter["dropoff_datetime"] = pd.to_datetime(
+        df_iter.get("lpep_dropoff_datetime", df_iter.get("tpep_dropoff_datetime")),
         errors="coerce",
     )
 
-    df = df.dropna(subset=["pickup_datetime", "dropoff_datetime"])
+    before_drop = len(df_iter)
+    df_iter = df_iter.dropna(subset=["pickup_datetime", "dropoff_datetime"])
+    logging.info(
+        f"[PREPARE] Dropped {before_drop - len(df_iter)} rows due to invalid dates"
+    )
 
-    df.columns = [
+    df_iter.columns = [
         re.sub(r"^_", "", re.sub(r"([A-Z]+)", r"_\1", col).lower())
-        for col in df.columns
+        for col in df_iter.columns
     ]
 
-    for col in df.columns:
+    for col in df_iter.columns:
         if "_id" in col:
-            df[col] = df[col].astype("UInt32")
-    if "passenger_count" in df.columns:
-        df["passenger_count"] = df["passenger_count"].astype("UInt8")
+            df_iter[col] = df_iter[col].astype("UInt32")
+    if "passenger_count" in df_iter.columns:
+        df_iter["passenger_count"] = df_iter["passenger_count"].astype("UInt8")
     for col in ["payment_type", "trip_type"]:
-        if col in df.columns:
-            df[col] = df[col].astype("UInt8")
+        if col in df_iter.columns:
+            df_iter[col] = df_iter[col].astype("UInt8")
     float_cols = [
         "trip_distance",
         "fare_amount",
@@ -122,23 +130,25 @@ def prepare_month(file_path: str):
         "cbd_congestion_fee",
     ]
     for col in float_cols:
-        if col in df.columns:
-            df[col] = df[col].astype("float32")
-    for col in ["cab_type", "store_and_fwd_flag"]:
-        if col in df.columns:
-            df[col] = df[col].astype("string")
+        if col in df_iter.columns:
+            df_iter[col] = df_iter[col].astype("float32")
+    str_cols = ["cab_type", "store_and_fwd_flag"]
+    for col in str_cols:
+        if col in df_iter.columns:
+            df_iter[col] = df_iter[col].astype("string")
 
-    df = df[[col for col in COLUMNS if col in df.columns]]
+    df_iter = df_iter[[col for col in COLUMNS if col in df_iter.columns]]
+    logging.info(f"[PREPARE] Columns after processing: {df_iter.columns.tolist()}")
 
     clean_path = os.path.join(
         LOCAL_DIR, os.path.basename(file_path).replace(".parquet", "_clean.parquet")
     )
-    df.to_parquet(clean_path, index=False)
+    df_iter.to_parquet(clean_path, index=False)
     logging.info(f"[PREPARE] Saved cleaned parquet to {clean_path}")
     return clean_path
 
 
-@task(retries=2, retry_delay=timedelta(seconds=10))
+@task
 def insert_month(file_path: str):
     logging.info(f"[LOAD] Loading file {file_path} into ClickHouse")
     conn = BaseHook.get_connection("click")
@@ -152,25 +162,31 @@ def insert_month(file_path: str):
 
     df = pd.read_parquet(file_path)
     cols = [col for col in COLUMNS if col in df.columns]
+    logging.info(f"[LOAD] Columns for insert: {cols}")
 
     batch_size = 50000
     total_rows = len(df)
+    batch_num = total_rows / batch_size
+    count = 0
     logging.info(f"[LOAD] Total rows to insert: {total_rows}")
-    for start in range(0, total_rows, batch_size):
-        batch = df.iloc[start : start + batch_size].to_dict("records")
+    for i in range(0, total_rows, batch_size):
+        batch = df.iloc[i : i + batch_size].to_dict("records")
         client.execute(
-            f"INSERT INTO {SCHEMA}.{TABLE} ({', '.join(cols)}) VALUES", batch
+            f"INSERT INTO {SCHEMA}.{TABLE} ({', '.join(cols)}) VALUES",
+            batch,
+            # types_check=True,
         )
-        logging.info(f"[LOAD] Inserted rows {start}-{start + len(batch)}")
+        count += 1
+        logging.info(f"Inserted {count}/{batch_num} Batch")
+    logging.info(f"[LOAD] Finished inserting {total_rows} rows")
 
 
 with DAG(
     dag_id=DAG_ID,
     start_date=datetime(2025, 11, 1),
     schedule="@monthly",
+    max_active_tasks=1,
     catchup=False,
-    max_active_tasks=1,  # limit active tasks to reduce memory usage
-    concurrency=1,  # limit total concurrent tasks
     tags=["nyc", "etl"],
 ) as dag:
 
