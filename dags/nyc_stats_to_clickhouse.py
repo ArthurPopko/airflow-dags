@@ -164,15 +164,15 @@ def load_month(file_path: str):
     cols = [col for col in COLUMNS if col in df.columns]
     logging.info(f"[LOAD] Columns for insert: {cols}")
 
-    batch_size = 5000
+    batch_size = 500000
     total_rows = len(df)
     logging.info(f"[LOAD] Total rows to insert: {total_rows}")
     for i in range(0, total_rows, batch_size):
         batch = df.iloc[i : i + batch_size].to_dict("records")
         client.execute(
             f"INSERT INTO {SCHEMA}.{TABLE} ({', '.join(cols)}) VALUES",
-            batch,
-            types_check=True,
+            batch
+            # types_check=True,
         )
         logging.info(f"[LOAD] Inserted rows {i} - {min(i + batch_size, total_rows)}")
     logging.info(f"[LOAD] Finished inserting {total_rows} rows")
