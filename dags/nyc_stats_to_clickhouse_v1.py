@@ -14,7 +14,7 @@ from airflow.models import Variable
 from airflow.utils.task_group import TaskGroup
 from clickhouse_driver import Client
 
-DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace("_v1.py", "")
+DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 DAG_CONFIG = Variable.get(f"{DAG_ID.lower()}__config", {}, deserialize_json=True)
 
 AWS_REGION = DAG_CONFIG.get("AWS_REGION")

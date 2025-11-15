@@ -3,6 +3,8 @@ select count() from staging.nyc_tlc_tripdata_local;
 
 optimize table staging.nyc_tlc_tripdata_local;
 
+TRUNCATE TABLE staging.nyc_tlc_tripdata_local;
+
 select * from staging.nyc_tlc_tripdata_local limit 10;
 
 SELECT
