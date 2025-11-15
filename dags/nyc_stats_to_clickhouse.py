@@ -170,7 +170,6 @@ with DAG(
     schedule="@monthly",
     catchup=False,
     max_active_tasks=1,  # limit active tasks to reduce memory usage
-    concurrency=1,  # limit total concurrent tasks
     tags=["nyc", "etl"],
 ) as dag:
 
