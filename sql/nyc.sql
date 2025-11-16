@@ -11,13 +11,11 @@ SELECT
     driver_id,
     min(pickup_datetime) AS shift_start,
     max(dropoff_datetime) AS shift_end,
-    sum(trip_time_min) AS total_trip_time_min,
     dateDiff(
-        'minute',
+        'day',
         shift_start,
         shift_end
-    ) AS shift_time_min,
-    total_trip_time_min / shift_time_min AS utilization_rate
+    ) AS shift_time_min
 FROM staging.nyc_tlc_tripdata_local
 GROUP BY
     driver_id;

@@ -19,6 +19,7 @@ DAG_CONFIG = Variable.get(f"{DAG_ID.lower()}__config", {}, deserialize_json=True
 AWS_REGION = DAG_CONFIG.get("AWS_REGION")
 S3_BUCKET = DAG_CONFIG.get("S3_BUCKET")
 BASE_URL = DAG_CONFIG.get("BASE_URL")
+BATCH_SIZE = DAG_CONFIG.get("BATCH_SIZE")
 MONTHS = DAG_CONFIG.get("MONTHS", [])
 CAB_TYPES = ["yellow", "green"]
 
@@ -150,7 +151,7 @@ def insert_month(file_path: str):
     df = pd.read_parquet(file_path)
     cols = [col for col in COLUMNS if col in df.columns]
 
-    batch_size = 50000
+    batch_size = BATCH_SIZE
     total_rows = len(df)
     logging.info(f"[LOAD] Total rows to insert: {total_rows}")
     for start in range(0, total_rows, batch_size):
