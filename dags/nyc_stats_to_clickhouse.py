@@ -6,7 +6,6 @@ from datetime import datetime, timedelta
 import numpy as np
 import pandas as pd
 import requests
-import s3fs
 from airflow import DAG
 from airflow.decorators import task
 from airflow.hooks.base import BaseHook
@@ -51,9 +50,6 @@ COLUMNS = [
     "cab_type",
     "store_and_fwd_flag",
 ]
-
-os.makedirs(LOCAL_DIR, exist_ok=True)
-fs = s3fs.S3FileSystem(anon=False)
 
 
 @task(retries=3, retry_delay=timedelta(seconds=30))
@@ -108,6 +104,7 @@ def prepare_month(file_path: str):
     for col in ["payment_type", "trip_type"]:
         if col in df.columns:
             df[col] = df[col].astype("UInt8")
+
     float_cols = [
         "trip_distance",
         "fare_amount",
@@ -169,7 +166,7 @@ with DAG(
     start_date=datetime(2025, 11, 1),
     schedule="@monthly",
     catchup=False,
-    max_active_tasks=1,  # limit active tasks to reduce memory usage
+    max_active_tasks=1,
     tags=["nyc", "etl"],
 ) as dag:
 
