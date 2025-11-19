@@ -55,6 +55,7 @@ COLUMNS = [
 
 @task(retries=3, retry_delay=timedelta(seconds=30))
 def download_file(cab: str, month: str):
+    os.makedirs(LOCAL_DIR, exist_ok=True)
     file_name = f"{cab}_tripdata_{month}.parquet"
     local_path = os.path.join(LOCAL_DIR, file_name)
     if os.path.exists(local_path):
