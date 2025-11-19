@@ -140,13 +140,20 @@ def prepare_month(file_path: str):
 @task(retries=2, retry_delay=timedelta(seconds=10))
 def insert_month(file_path: str):
     logging.info(f"[LOAD] Loading file {file_path} into ClickHouse")
-    conn = BaseHook.get_connection("click")
+    # conn = BaseHook.get_connection("click")
+    # client = Client(
+    #     host=conn.host,
+    #     port=int(conn.port or 9000),
+    #     user=conn.login,
+    #     password=conn.password,
+    #     database=conn.schema or SCHEMA,
+    # )
     client = Client(
-        host=conn.host,
-        port=int(conn.port or 9000),
-        user=conn.login,
-        password=conn.password,
-        database=conn.schema or SCHEMA,
+        host='http://clickhouse-server',
+        port=8123,
+        user='click',
+        password='click',
+        database=SCHEMA,
     )
 
     df = pd.read_parquet(file_path)
