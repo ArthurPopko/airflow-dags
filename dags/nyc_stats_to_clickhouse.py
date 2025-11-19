@@ -21,7 +21,7 @@ S3_BUCKET = DAG_CONFIG.get("S3_BUCKET")
 BASE_URL = DAG_CONFIG.get("BASE_URL")
 BATCH_SIZE = DAG_CONFIG.get("BATCH_SIZE")
 MONTHS = DAG_CONFIG.get("MONTHS", [])
-CAB_TYPES = ["yellow", "green"]
+CAB_TYPES = DAG_CONFIG.get("CAB_TYPES", [])
 
 LOCAL_DIR = "/etl_cache/nyc"
 SCHEMA = "staging"
