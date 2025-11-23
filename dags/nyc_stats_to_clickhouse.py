@@ -13,6 +13,8 @@ from airflow.models import Variable
 from airflow.utils.task_group import TaskGroup
 from clickhouse_driver import Client
 
+from lib.common import send_slack_message
+
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 DAG_CONFIG = Variable.get(f"{DAG_ID.lower()}__config", {}, deserialize_json=True)
 SLACK_CONN_ID = "slack_conn"
@@ -72,25 +74,6 @@ def build_slack_message(
     ]
 
     return "\n".join(parts)
-
-
-def send_slack_message(message: str):
-    conn = BaseHook.get_connection(SLACK_CONN_ID)
-    token = conn.password
-
-    logging.info("Sending message to Slack...")
-
-    resp = requests.post(
-        "https://slack.com/api/chat.postMessage",
-        headers={"Authorization": f"Bearer {token}"},
-        data={
-            "channel": SLACK_CHANNEL,
-            "text": message,
-        },
-    )
-
-    if not resp.ok or not resp.json().get("ok"):
-        logging.error(f"Failed to send message to Slack: {resp.text}")
 
 
 @task(retries=3, retry_delay=timedelta(seconds=30))
@@ -220,7 +203,7 @@ def insert_month(file_path: str, **kwargs):
         inserted_rows=inserted_rows,
     )
 
-    send_slack_message(slack_message)
+    send_slack_message(SLACK_CONN_ID, SLACK_CHANNEL, slack_message)
 
 
 with DAG(
