@@ -62,14 +62,13 @@ def build_slack_message(
 ) -> str:
 
     parts = [
-        "📊 *Insert into ClickHouse Completed Successfully!*",
+        "📊 *Insert into ClickHouse Completed Successfully!*\n",
         f"*Task:* `{task_id}`",
         f"*File:* `{file_path}`",
         f"*Table:* `{SCHEMA}.{TABLE}`",
-        f"*Total Rows:* *{inserted_rows}*",
-        "",
+        f"*Total Rows:* *{inserted_rows}*\n",
         f"*DAG:* `{dag_id}`",
-        f"🔗 *Logs:* <{log_url}|Open Airflow Logs>",
+        f"*Logs:* <{log_url}|Open Airflow Logs>",
     ]
 
     return "\n".join(parts)
