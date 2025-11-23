@@ -52,9 +52,6 @@ COLUMNS = [
     "store_and_fwd_flag",
 ]
 
-conn = BaseHook.get_connection(SLACK_CONN_ID)
-token = conn.password
-
 
 @task(retries=3, retry_delay=timedelta(seconds=30))
 def download_file(cab: str, month: str):
@@ -164,7 +161,7 @@ def insert_month(file_path: str):
     #         f"INSERT INTO {SCHEMA}.{TABLE} ({', '.join(cols)}) VALUES", batch
     #     )
     #     logging.info(f"[LOAD] Inserted rows {start}-{start + len(batch)}")
-        
+
     conn = BaseHook.get_connection(SLACK_CONN_ID)
     token = conn.password
 
@@ -199,4 +196,4 @@ with DAG(
     #             clean = prepare_month(download)
     #             insert = insert_month(clean)
     #             download >> clean >> insert
-    insert_month('123')
+    insert_month("123")
