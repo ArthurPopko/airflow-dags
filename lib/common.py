@@ -21,3 +21,7 @@ def send_slack_message(conn_id, channel, message: str):
 
     if not resp.ok or not resp.json().get("ok"):
         logging.error(f"Failed to send message to Slack: {resp.text}")
+
+
+if __name__ == "__main__":
+    pass
