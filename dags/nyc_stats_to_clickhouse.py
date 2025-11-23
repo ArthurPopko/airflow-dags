@@ -60,23 +60,19 @@ def build_slack_message(
     file_path: str,
     inserted_rows: int,
 ) -> str:
-    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    return f"""
-                📊 *Insert into ClickHouse Completed Successfully!*
+    parts = [
+        "📊 *Insert into ClickHouse Completed Successfully!*",
+        f"*Task:* `{task_id}`",
+        f"*File:* `{file_path}`",
+        f"*Table:* `{SCHEMA}.{TABLE}`",
+        f"*Total Rows:* *{inserted_rows}*",
+        "",
+        f"*DAG:* `{dag_id}`",
+        f"🔗 *Logs:* <{log_url}|Open Airflow Logs>",
+    ]
 
-                *DAG:* `{dag_id}`
-                *Task:* `{task_id}`
-                *File:* `{file_path}`
-                *Table:* `{SCHEMA}.{TABLE}`
-
-                *Total Rows:* *{inserted_rows}*
-                *Timestamp:* {timestamp}
-
-                🔗 *Logs:* {log_url}
-
-                Everything looks good! 🎉
-            """
+    return "\n".join(parts)
 
 
 def send_slack_message(message: str):
