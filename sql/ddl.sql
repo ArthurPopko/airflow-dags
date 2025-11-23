@@ -1,9 +1,6 @@
 CREATE DATABASE IF NOT EXISTS staging;
 
-CREATE
-OR
-REPLACE
-TABLE staging.nyc_tlc_tripdata_local (
+CREATE TABLE staging.nyc_tlc_tripdata_local (
     driver_id UInt32, -- сгенерированный ID водителя
     pickup_datetime DateTime64 (3, 'UTC'), -- время начала поездки
     dropoff_datetime DateTime64 (3, 'UTC'), -- время конца поездки
