@@ -171,7 +171,7 @@ def insert_month(file_path: str):
         "https://slack.com/api/chat.postMessage",
         headers={"Authorization": f"Bearer {token}"},
         data={
-            "channels": SLACK_CHANNEL,
+            "channel": SLACK_CHANNEL,
             "title": title,
             "markdown_text": "**Hello world**",
         },
