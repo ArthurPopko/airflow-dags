@@ -15,9 +15,9 @@ from clickhouse_driver import Client
 
 DAG_ID = os.path.basename(__file__).replace(".pyc", "").replace(".py", "")
 DAG_CONFIG = Variable.get(f"{DAG_ID.lower()}__config", {}, deserialize_json=True)
+SLACK_CONN_ID = "slack_conn"
+SLACK_CHANNEL = "reports"
 
-AWS_REGION = DAG_CONFIG.get("AWS_REGION")
-S3_BUCKET = DAG_CONFIG.get("S3_BUCKET")
 BASE_URL = DAG_CONFIG.get("BASE_URL")
 BATCH_SIZE = DAG_CONFIG.get("BATCH_SIZE")
 MONTHS = DAG_CONFIG.get("MONTHS", [])
@@ -51,6 +51,9 @@ COLUMNS = [
     "cab_type",
     "store_and_fwd_flag",
 ]
+
+conn = BaseHook.get_connection(SLACK_CONN_ID)
+token = conn.password
 
 
 @task(retries=3, retry_delay=timedelta(seconds=30))
@@ -140,27 +143,44 @@ def prepare_month(file_path: str):
 @task(retries=2, retry_delay=timedelta(seconds=10))
 def insert_month(file_path: str):
     logging.info(f"[LOAD] Loading file {file_path} into ClickHouse")
-    conn = BaseHook.get_connection("click")
-    client = Client(
-        host=conn.host,
-        port=int(conn.port or 9000),
-        user=conn.login,
-        password=conn.password,
-        database=conn.schema or SCHEMA,
+    # conn = BaseHook.get_connection("click")
+    # client = Client(
+    #     host=conn.host,
+    #     port=int(conn.port or 9000),
+    #     user=conn.login,
+    #     password=conn.password,
+    #     database=conn.schema or SCHEMA,
+    # )
+
+    # df = pd.read_parquet(file_path)
+    # cols = [col for col in COLUMNS if col in df.columns]
+
+    # batch_size = BATCH_SIZE
+    # total_rows = len(df)
+    # logging.info(f"[LOAD] Total rows to insert: {total_rows}")
+    # for start in range(0, total_rows, batch_size):
+    #     batch = df.iloc[start : start + batch_size].to_dict("records")
+    #     client.execute(
+    #         f"INSERT INTO {SCHEMA}.{TABLE} ({', '.join(cols)}) VALUES", batch
+    #     )
+    #     logging.info(f"[LOAD] Inserted rows {start}-{start + len(batch)}")
+        
+    conn = BaseHook.get_connection(SLACK_CONN_ID)
+    token = conn.password
+
+    logging.info("Sending msg to Slack...")
+    title = "Insert Successful"
+    resp = requests.post(
+        "https://slack.com/api/chat.postMessage",
+        headers={"Authorization": f"Bearer {token}"},
+        data={
+            "channels": SLACK_CHANNEL,
+            "title": title,
+            "markdown_text": "**Hello world**",
+        },
     )
-
-    df = pd.read_parquet(file_path)
-    cols = [col for col in COLUMNS if col in df.columns]
-
-    batch_size = BATCH_SIZE
-    total_rows = len(df)
-    logging.info(f"[LOAD] Total rows to insert: {total_rows}")
-    for start in range(0, total_rows, batch_size):
-        batch = df.iloc[start : start + batch_size].to_dict("records")
-        client.execute(
-            f"INSERT INTO {SCHEMA}.{TABLE} ({', '.join(cols)}) VALUES", batch
-        )
-        logging.info(f"[LOAD] Inserted rows {start}-{start + len(batch)}")
+    if not resp.ok or not resp.json().get("ok"):
+        logging.error(f"Failed to send msg to Slack: {resp.text}")
 
 
 with DAG(
@@ -172,10 +192,11 @@ with DAG(
     tags=["nyc", "etl"],
 ) as dag:
 
-    for cab in CAB_TYPES:
-        for month in MONTHS:
-            with TaskGroup(group_id=f"{cab}_{month}") as tg:
-                download = download_file(cab, month)
-                clean = prepare_month(download)
-                insert = insert_month(clean)
-                download >> clean >> insert
+    # for cab in CAB_TYPES:
+    #     for month in MONTHS:
+    #         with TaskGroup(group_id=f"{cab}_{month}") as tg:
+    #             download = download_file(cab, month)
+    #             clean = prepare_month(download)
+    #             insert = insert_month(clean)
+    #             download >> clean >> insert
+    insert_month('123')
