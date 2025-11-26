@@ -31,7 +31,7 @@ ORDER BY (driver_id, pickup_datetime) -- сортировка для оптим�
     SETTINGS index_granularity = 8192;
 
 ## driver_performance view
-CREATE OR REPLACE VIEW pl.driver_performance AS
+CREATE VIEW pl.driver_performance AS
 SELECT
     driver_id,
     count() AS total_trips,
@@ -45,10 +45,9 @@ SELECT
     (total_fare / nullIf(total_trip_seconds, 0)) * 60 AS avg_fare_per_min
 FROM staging.nyc_tlc_tripdata_local
 GROUP BY driver_id;
-;
 
 ## trip_efficiency
-CREATE OR REPLACE VIEW pl.trip_efficiency AS
+CREATE VIEW pl.trip_efficiency AS
 SELECT
     driver_id,
     pickup_datetime,
@@ -61,3 +60,14 @@ SELECT
 FROM staging.nyc_tlc_tripdata_local final
 WHERE trip_distance > 0;
 
+## for superset
+CREATE VIEW pl.driver_trips AS
+SELECT
+    driver_id,
+    pickup_datetime,
+    dropoff_datetime,
+    fare_amount,
+    tip_amount,
+    trip_distance,
+    dateDiff('second', pickup_datetime, dropoff_datetime) AS trip_seconds
+FROM staging.nyc_tlc_tripdata_local;
