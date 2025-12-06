@@ -1,0 +1,28 @@
+FROM apache/airflow:3.1.1
+
+USER root
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        curl \
+        unzip \
+        build-essential \
+        python3-dev \
+        liblz4-dev \
+        libzstd-dev \
+    && \
+    curl "https://awscli.amazonaws.com/awscli-exe-linux-x86_64.zip" -o "/tmp/awscliv2.zip" && \
+    unzip /tmp/awscliv2.zip -d /tmp && \
+    /tmp/aws/install && \
+    rm -rf /tmp/aws /tmp/awscliv2.zip && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+USER airflow
+
+RUN pip install --no-cache-dir \
+    apache-airflow-providers-git \
+    airflow-clickhouse-plugin \
+    s3fs \
+    pandas \
+    numpy \
+    requests
