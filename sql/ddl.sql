@@ -1,3 +1,4 @@
+-- Active: 1763493881036@@localhost@8123@staging
 ## clean trip data
 CREATE TABLE staging.nyc_tlc_tripdata_local (
     driver_id UInt32, --     сгенерированный ID водителя
@@ -71,3 +72,14 @@ SELECT
     trip_distance,
     dateDiff('second', pickup_datetime, dropoff_datetime) AS trip_seconds
 FROM staging.nyc_tlc_tripdata_local;
+
+
+## fleet info
+CREATE or replace VIEW pl.fleet_metrics AS
+SELECT 
+    vendor_id as fleet
+    , driver_id
+    ,pickup_datetime 
+    ,dropoff_datetime
+FROM staging.nyc_tlc_tripdata_local final
+;

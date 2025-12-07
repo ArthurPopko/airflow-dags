@@ -102,7 +102,7 @@ def prepare_month(file_path: str):
     df = pd.read_parquet(file_path, engine="pyarrow")
 
     np.random.seed(42)
-    df["driver_id"] = np.random.randint(1, 1001, size=len(df))
+    df["driver_id"] = np.random.randint(1, 3001, size=len(df))
     logging.info("[PREPARE] Generated driver_id")
 
     df["pickup_datetime"] = pd.to_datetime(

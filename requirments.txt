@@ -8,6 +8,7 @@ aiosmtplib==5.0.0
 aiosqlite==0.21.0
 airflow-clickhouse-plugin==1.6.0
 airflow-providers==0.3.0
+airflow-python-sdk==1.0.1
 alembic==1.17.1
 annotated-doc==0.0.3
 annotated-types==0.7.0
@@ -65,6 +66,7 @@ executing==2.2.1
 fastapi==0.121.0
 fastapi-cli==0.0.14
 fastapi-cloud-cli==0.3.1
+fastjsonschema==2.21.2
 flake8==7.3.0
 Flask==2.2.5
 Flask-AppBuilder==4.3.6
@@ -129,7 +131,10 @@ mypy-boto3-appflow==1.40.63
 mypy-boto3-rds==1.40.50
 mypy-boto3-redshift-data==1.40.57
 mypy-extensions==1.0.0
+narwhals==2.13.0
+nbformat==5.10.4
 nest-asyncio==1.6.0
+nulltype==2.3.1
 numpy==2.3.4
 opentelemetry-api==1.38.0
 opentelemetry-exporter-otlp==1.38.0
@@ -149,6 +154,7 @@ pendulum==3.1.0
 pexpect==4.9.0
 pip-tools==7.5.1
 platformdirs==3.0.0
+plotly==6.5.0
 pluggy==1.6.0
 ply==3.11
 prison==0.2.1
